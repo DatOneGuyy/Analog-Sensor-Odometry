@@ -5,3 +5,4 @@ __pycache__
 verilator/
 obj_dir/
 angles
+add32
