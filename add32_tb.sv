@@ -38,7 +38,7 @@ initial begin
             successes = successes + 1;
         end
 
-        if (mismatches > 0) begin
+        if (mismatches > 99) begin
             $display("Ended after 100 mismatches.");
             $finish;
         end

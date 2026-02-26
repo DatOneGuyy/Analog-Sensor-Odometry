@@ -4,119 +4,133 @@ module add32(
     output logic [31:0] sum
 );
 
-localparam bias = 8'd127;
-
-logic unsigned [7:0] exp_a;
-logic unsigned [7:0] exp_b;
-logic unsigned [7:0] diff;
-
-logic signed [24:0] mantissa_a;
-logic signed [24:0] mantissa_b;
-logic signed [24:0] mantissa_a_neg;
-logic signed [24:0] mantissa_b_neg;
+logic unsigned [7:0] exp_a, exp_b, exp_sum, lz_count_exp, diff;
+logic unsigned [26:0] mantissa_a, mantissa_b, shifted_mantissa;
 
 assign exp_a = a[30:23]; 
 assign exp_b = b[30:23];
 
-//restore original mantissa values
-assign mantissa_a = {2'b01, a[22:0]};
-assign mantissa_b = {2'b01, b[22:0]};
-assign mantissa_a_neg = ~mantissa_a + 1'b1;
-assign mantissa_b_neg = ~mantissa_b + 1'b1;
+//{leading 1, mantissa, G, R, S}
+assign mantissa_a = {1'b1, a[22:0], 3'b000};
+assign mantissa_b = {1'b1, b[22:0], 3'b000};
 
-logic signed [26:0] shifted_mantissa;
-logic signed [24:0] sum_mantissa;
-logic unsigned [24:0] sum_mantissa_unsigned;
-logic sum_mantissa_sign;
-logic signed [7:0] exp_sum;
+logic round_up;
 
-logic addition_overflow;
+//{overflow, leading 1, mantissa, G, R, S}
+logic unsigned [27:0] sum_mantissa, lz_count_mantissa;
+logic [4:0] leading_zeroes;
+lzc_28 lzc_inst(.in_vec(sum_mantissa), .leading_zeroes(leading_zeroes));
 
-integer leading_zeroes;
+logic result_sign;
 
-logic G, R, S, LSB, round_up;
+logic s_bit_a, s_bit_b, new_sticky;
 
 always @(*) begin
+    shifted_mantissa = 27'b0;
+    sum_mantissa = 28'b0;
+    new_sticky = 1'b0;
+    s_bit_a = 1'b0;
+    s_bit_b = 1'b0;
+
     if (exp_a > exp_b) begin
         diff = exp_a - exp_b;
+        exp_sum = exp_a;
+        result_sign = a[31];
+
         if (diff < 26) begin
-            shifted_mantissa = {(b[31] ? mantissa_b_neg : mantissa_b), 2'b00};
-            shifted_mantissa = shifted_mantissa >>> diff;
-            sum_mantissa = (a[31] ? mantissa_a_neg : mantissa_a) + shifted_mantissa[26:2];
-            sum_mantissa_sign = sum_mantissa[24];
+            shifted_mantissa = mantissa_b >> diff;
+            s_bit_b = |(mantissa_b << (27 - diff));
+            shifted_mantissa[0] = shifted_mantissa[0] | s_bit_b;
+
+            if (a[31] ^ b[31]) sum_mantissa = mantissa_a - shifted_mantissa;
+            else sum_mantissa = mantissa_a + shifted_mantissa;
         end
         else begin
             shifted_mantissa = 27'b0;
-            sum_mantissa = (a[31] ? mantissa_a_neg : mantissa_a);
-            sum_mantissa_sign = a[31];
-        end
+            sum_mantissa = {2'b01, a[22:0], 3'b000};
 
-        S = |({(b[31] ? mantissa_b_neg : mantissa_b)} << (27 - diff));
-        
-        addition_overflow = (a[31] == b[31]) & (a[31] != sum_mantissa_sign);
-        exp_sum = exp_a + {7'b0, (a[31] == b[31]) & (a[31] != sum_mantissa_sign)};
-
-        if (addition_overflow) begin
-            sum_mantissa = {a[31], sum_mantissa[24:1]};
-            sum_mantissa_sign = a[31];
+            sum_mantissa[0] = |mantissa_b;
         end
     end
-    else begin
+    else if (exp_b > exp_a) begin
         diff = exp_b - exp_a;
+        exp_sum = exp_b;
+        result_sign = b[31];
+
         if (diff < 26) begin
-            shifted_mantissa = {(a[31] ? mantissa_a_neg : mantissa_a), 2'b00};
-            shifted_mantissa = shifted_mantissa >>> diff;
-            sum_mantissa = (b[31] ? mantissa_b_neg : mantissa_b) + shifted_mantissa[26:2];
-            sum_mantissa_sign = sum_mantissa[24];
+            shifted_mantissa = mantissa_a >> diff;
+            s_bit_a = |(mantissa_a << (27 - diff));
+            shifted_mantissa[0] = shifted_mantissa[0] | s_bit_a;
+
+            if (a[31] ^ b[31]) sum_mantissa = mantissa_b - shifted_mantissa;
+            else sum_mantissa = mantissa_b + shifted_mantissa;
         end
         else begin
             shifted_mantissa = 27'b0;
-            sum_mantissa = (b[31] ? mantissa_b_neg : mantissa_b);
-            sum_mantissa_sign = b[31];
+            sum_mantissa[0] = |(mantissa_a << (27 - diff));
+            
+            sum_mantissa = {2'b01, b[22:0], 3'b000};
+            sum_mantissa[0] = |mantissa_a;
         end
-        
-        G = shifted_mantissa[1];
-        R = shifted_mantissa[0];
-        S = |({(a[31] ? mantissa_a_neg : mantissa_a)} << (27 - diff));
-
-        addition_overflow = (a[31] == b[31]) & (a[31] != sum_mantissa_sign);
-        exp_sum = exp_b + {7'b0, addition_overflow};
-
-        if (addition_overflow) begin
-            sum_mantissa = {b[31], sum_mantissa[24:1]};
-            sum_mantissa_sign = b[31];
-        end
-    end
-
-    LSB = sum_mantissa[0];
-
-    round_up = G & (R | S | LSB);
-    exp_sum = exp_sum + {7'b0, (&(sum_mantissa[23:0]) & round_up)};
-
-    if (sum_mantissa_sign) begin
-        sum_mantissa_unsigned = (~sum_mantissa) + 25'b1;
     end
     else begin
-        sum_mantissa_unsigned = sum_mantissa;
-    end
+        diff = 8'b0;
+        exp_sum = exp_a;
 
-    leading_zeroes = 0;
-    //begin count ignoring the bit used for checking sign
-    for (integer i = 23; i >= 0; i = i - 1) begin
-        if (~sum_mantissa_unsigned[i]) begin
-            leading_zeroes = leading_zeroes + 1;
+        if (a[31] ^ b[31]) begin
+            if (mantissa_a > mantissa_b) begin
+                sum_mantissa = mantissa_a - mantissa_b;
+                result_sign = a[31];
+            end
+            else begin
+                sum_mantissa = mantissa_b - mantissa_a;
+                result_sign = b[31];
+            end
         end
         else begin
-            break;
+            sum_mantissa = mantissa_a + mantissa_b;
+            result_sign = a[31];
         end
     end
 
-    sum_mantissa_unsigned = sum_mantissa_unsigned << leading_zeroes;
-    exp_sum = exp_sum - leading_zeroes[7:0];
+    //renormalize addition overflow
+    if (sum_mantissa[27]) begin
+        new_sticky = sum_mantissa[1] | sum_mantissa[0];
 
-    sum_mantissa = sum_mantissa + round_up;
+        exp_sum = exp_sum + 8'b1;
+        sum_mantissa = sum_mantissa >> 1;
+        sum_mantissa[0] = new_sticky;
+    end
+    
+    lz_count_mantissa = sum_mantissa;
+    lz_count_exp = exp_sum;
+end
 
-    sum = {sum_mantissa_sign, exp_sum, sum_mantissa_unsigned[22:0]};
+logic [27:0] normalized_mantissa;
+logic [7:0] normalized_exp;
+
+always_comb begin
+    normalized_mantissa = lz_count_mantissa;
+    normalized_exp = lz_count_exp;
+
+    if (normalized_mantissa == 28'b0) begin
+        normalized_exp = 8'b0;
+    end
+    else if ({3'b0, leading_zeroes} >= normalized_exp) begin
+        normalized_mantissa = normalized_mantissa << (normalized_exp - 1);
+        normalized_exp = 8'b0;
+    end
+    else begin
+        normalized_mantissa = normalized_mantissa << leading_zeroes;
+        normalized_exp = normalized_exp - {3'b0, leading_zeroes};
+    end
+
+    round_up = normalized_mantissa[2] & (normalized_mantissa[1] | normalized_mantissa[0] | normalized_mantissa[3]);
+    
+    normalized_exp = normalized_exp + {7'b0, (&(normalized_mantissa[25:3]) & round_up)};
+    normalized_mantissa = normalized_mantissa + {24'b0, round_up, 3'b0};
+
+    sum = {result_sign, normalized_exp, normalized_mantissa[25:3]};
 end
 
 endmodule

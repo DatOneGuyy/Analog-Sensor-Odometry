@@ -90,52 +90,43 @@ def float_to_u32(f):
     return struct.unpack('!I', struct.pack('!f', f))[0]
 
 
-if __name__ == '__main__':
-    # quick random test comparing to rounded float32 addition
-    rng = random.Random(123)
-    mismatches = 0
-    for _ in range(2000):
-        # generate random normal-ish floats by random exponents and fractions
-        a_bits = rng.getrandbits(32)
-        b_bits = rng.getrandbits(32)
-        # skip NaN/Inf/subnormal by ensuring exp not all 0 or all 1
-        def sanitize(x):
-            s, e, f = u32_to_fields(x)
-            if e == 0 or e == 0xFF:
-                e = rng.randint(1, 0xFE)
-            return fields_to_u32(s, e, f)
-        a_bits = sanitize(a_bits)
-        b_bits = sanitize(b_bits)
-
-        ref_bits = add_fp32_bits(a_bits, b_bits)
-
-        # compute float32-add via Python float pack->unpack (round to float32)
-        fa = u32_to_float(a_bits)
-        fb = u32_to_float(b_bits)
-        real_sum = struct.unpack('!I', struct.pack('!f', fa + fb))[0]
-
-        if ref_bits != real_sum:
-            mismatches += 1
-
-    print(f"Checked 2000 random cases; mismatches vs float32 add: {mismatches}")
-    print("Note: implementation uses truncation-like normalization, no IEEE rounding rules.")
-
-
 def generate_vectors(filename='vectors.txt', count=1000, seed=12345):
     rng = random.Random(seed)
     with open(filename, 'w') as f:
-        for _ in range(count):
-            a = rng.getrandbits(32)
-            b = rng.getrandbits(32)
+        generated = 0
+        while generated < count:
+            a_bits = rng.getrandbits(32)
+            b_bits = rng.getrandbits(32)
+            
             # sanitize exponents to avoid subnormals/inf/nan
-            def s(x):
+            def sanitize(x):
                 sgn, e, fr = u32_to_fields(x)
                 if e == 0 or e == 0xFF:
                     e = rng.randint(1, 0xFE)
                 return fields_to_u32(sgn, e, fr)
-            a = s(a)
-            b = s(b)
-            r = add_fp32_bits(a, b)
-            f.write(f"%08x %08x %08x\n" % (a, b, r))
+                
+            a_bits = sanitize(a_bits)
+            b_bits = sanitize(b_bits)
+            
+            fa = u32_to_float(a_bits)
+            fb = u32_to_float(b_bits)
+            
+            real_sum_float = fa + fb
+            
+            try:
+                # Attempt to pack back into 32-bit float
+                r_bits = float_to_u32(real_sum_float)
+            except OverflowError:
+                # The sum exceeded FP32 limits. 
+                # Skip this pair and try again.
+                continue
+                
+            f.write(f"%08x %08x %08x\n" % (a_bits, b_bits, r_bits))
+            generated += 1 # Only increment on success
 
 
+if __name__ == '__main__':
+    rng = random.Random(123)
+    print("generating vectors\n")
+
+    generate_vectors()
