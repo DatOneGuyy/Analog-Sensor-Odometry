@@ -90,7 +90,7 @@ def float_to_u32(f):
     return struct.unpack('!I', struct.pack('!f', f))[0]
 
 
-def generate_vectors(filename='vectors.txt', count=1000, seed=12345):
+def generate_vectors(filename='test/vectors.txt', count=5000, seed=12345):
     rng = random.Random(seed)
     with open(filename, 'w') as f:
         generated = 0
