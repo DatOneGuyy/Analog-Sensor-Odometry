@@ -68,10 +68,6 @@ always_comb begin : calculation
         end
         else begin
             shifted_mantissa = 27'b0;
-<<<<<<< HEAD
-            
-=======
->>>>>>> nan_infty_implementation
             sum_mantissa = {2'b01, b[22:0], 3'b000};
 
             sum_mantissa[0] = |mantissa_a;
