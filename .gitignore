@@ -1,0 +1,7 @@
+.git/
+iverilog/
+__pycache__
+.vscode/
+verilator/
+obj_dir/
+angles
