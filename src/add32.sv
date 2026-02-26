@@ -47,8 +47,8 @@ always @(*) begin
         end
         else begin
             shifted_mantissa = 27'b0;
-            sum_mantissa = {2'b01, a[22:0], 3'b000};
 
+            sum_mantissa = {2'b01, a[22:0], 3'b000};
             sum_mantissa[0] = |mantissa_b;
         end
     end
@@ -67,7 +67,6 @@ always @(*) begin
         end
         else begin
             shifted_mantissa = 27'b0;
-            sum_mantissa[0] = |(mantissa_a << (27 - diff));
             
             sum_mantissa = {2'b01, b[22:0], 3'b000};
             sum_mantissa[0] = |mantissa_a;
