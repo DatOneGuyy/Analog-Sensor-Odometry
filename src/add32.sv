@@ -20,7 +20,7 @@ logic round_up;
 //{overflow, leading 1, mantissa, G, R, S}
 logic unsigned [27:0] sum_mantissa, lz_count_mantissa;
 logic [4:0] leading_zeroes;
-lzc_28 lzc_inst(.in_vec(sum_mantissa), .leading_zeroes(leading_zeroes));
+lzc28 lzc_inst(.in_vec(sum_mantissa), .leading_zeroes(leading_zeroes));
 
 logic result_sign;
 
@@ -68,9 +68,8 @@ always_comb begin : calculation
         end
         else begin
             shifted_mantissa = 27'b0;
-            sum_mantissa[0] = |(mantissa_a << (27 - diff));
-            
             sum_mantissa = {2'b01, b[22:0], 3'b000};
+
             sum_mantissa[0] = |mantissa_a;
         end
     end
@@ -109,21 +108,24 @@ end
 
 logic [27:0] normalized_mantissa;
 logic [7:0] normalized_exp;
+logic [4:0] shift_amount; 
 
-always_comb begin : normalization
+always_comb begin
     normalized_mantissa = lz_count_mantissa;
     normalized_exp = lz_count_exp;
+
+    shift_amount = leading_zeroes - 5'd1;
 
     if (normalized_mantissa == 28'b0) begin
         normalized_exp = 8'b0;
     end
-    else if ({3'b0, leading_zeroes} >= normalized_exp) begin
+    else if ({3'b0, shift_amount} >= normalized_exp) begin
         normalized_mantissa = normalized_mantissa << (normalized_exp - 1);
         normalized_exp = 8'b0;
     end
     else begin
-        normalized_mantissa = normalized_mantissa << leading_zeroes;
-        normalized_exp = normalized_exp - {3'b0, leading_zeroes};
+        normalized_mantissa = normalized_mantissa << shift_amount;
+        normalized_exp = normalized_exp - {3'b0, shift_amount};
     end
 
     round_up = normalized_mantissa[2] & (normalized_mantissa[1] | normalized_mantissa[0] | normalized_mantissa[3]);
@@ -149,7 +151,7 @@ always_comb begin : edge_cases
 
     if (a_nan | b_nan) begin
         is_special = 1'b1;
-        special_result = a;
+        special_result = a_nan ? a : b;
     end
     else if (a_infty ^ b_infty) begin
         is_special = 1'b1;
