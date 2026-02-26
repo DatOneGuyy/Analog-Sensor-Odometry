@@ -13,7 +13,7 @@ integer file;
 integer ret;
 integer count;
 initial begin
-    file = $fopen("vectors.txt", "r");
+    file = $fopen("../test/vectors.txt", "r");
 
     if (file == 0) begin
         $display("Could not open vectors.txt");
