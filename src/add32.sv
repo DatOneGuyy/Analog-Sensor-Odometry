@@ -6,6 +6,7 @@ module add32(
 
 logic unsigned [7:0] exp_a, exp_b, exp_sum, lz_count_exp, diff;
 logic unsigned [26:0] mantissa_a, mantissa_b, shifted_mantissa;
+logic [31:0] calculated_sum;
 
 assign exp_a = a[30:23]; 
 assign exp_b = b[30:23];
@@ -19,13 +20,13 @@ logic round_up;
 //{overflow, leading 1, mantissa, G, R, S}
 logic unsigned [27:0] sum_mantissa, lz_count_mantissa;
 logic [4:0] leading_zeroes;
-lzc_28 lzc_inst(.in_vec(sum_mantissa), .leading_zeroes(leading_zeroes));
+lzc28 lzc_inst(.in_vec(sum_mantissa), .leading_zeroes(leading_zeroes));
 
 logic result_sign;
 
 logic s_bit_a, s_bit_b, new_sticky;
 
-always @(*) begin
+always_comb begin : calculation
     shifted_mantissa = 27'b0;
     sum_mantissa = 28'b0;
     new_sticky = 1'b0;
@@ -67,8 +68,12 @@ always @(*) begin
         end
         else begin
             shifted_mantissa = 27'b0;
+<<<<<<< HEAD
             
+=======
+>>>>>>> nan_infty_implementation
             sum_mantissa = {2'b01, b[22:0], 3'b000};
+
             sum_mantissa[0] = |mantissa_a;
         end
     end
@@ -107,21 +112,24 @@ end
 
 logic [27:0] normalized_mantissa;
 logic [7:0] normalized_exp;
+logic [4:0] shift_amount; 
 
 always_comb begin
     normalized_mantissa = lz_count_mantissa;
     normalized_exp = lz_count_exp;
 
+    shift_amount = leading_zeroes - 5'd1;
+
     if (normalized_mantissa == 28'b0) begin
         normalized_exp = 8'b0;
     end
-    else if ({3'b0, leading_zeroes} >= normalized_exp) begin
+    else if ({3'b0, shift_amount} >= normalized_exp) begin
         normalized_mantissa = normalized_mantissa << (normalized_exp - 1);
         normalized_exp = 8'b0;
     end
     else begin
-        normalized_mantissa = normalized_mantissa << leading_zeroes;
-        normalized_exp = normalized_exp - {3'b0, leading_zeroes};
+        normalized_mantissa = normalized_mantissa << shift_amount;
+        normalized_exp = normalized_exp - {3'b0, shift_amount};
     end
 
     round_up = normalized_mantissa[2] & (normalized_mantissa[1] | normalized_mantissa[0] | normalized_mantissa[3]);
@@ -129,7 +137,36 @@ always_comb begin
     normalized_exp = normalized_exp + {7'b0, (&(normalized_mantissa[25:3]) & round_up)};
     normalized_mantissa = normalized_mantissa + {24'b0, round_up, 3'b0};
 
-    sum = {result_sign, normalized_exp, normalized_mantissa[25:3]};
+    calculated_sum = {result_sign, normalized_exp, normalized_mantissa[25:3]};
+end
+
+logic a_infty, a_nan, b_infty, b_nan;
+assign a_infty = (exp_a == 8'hff) & (mantissa_a[25:3] == 23'b0);
+assign b_infty = (exp_b == 8'hff) & (mantissa_b[25:3] == 23'b0);
+assign a_nan = (exp_a == 8'hff) & (mantissa_a[25:3] != 23'b0);
+assign b_nan = (exp_b == 8'hff) & (mantissa_b[25:3] != 23'b0);
+
+logic is_special;
+logic [31:0] special_result;
+
+always_comb begin : edge_cases
+    is_special = 1'b0;
+    special_result = 32'h7FC00000;
+
+    if (a_nan | b_nan) begin
+        is_special = 1'b1;
+        special_result = a_nan ? a : b;
+    end
+    else if (a_infty ^ b_infty) begin
+        is_special = 1'b1;
+        special_result = a_infty ? a : b;
+    end
+    else if (a_infty & b_infty) begin
+        is_special = 1'b1;
+        special_result = (a[31] ~^ b[31]) ? a : 32'h7FC00000;
+    end
+
+    sum = is_special ? special_result : calculated_sum;
 end
 
 endmodule

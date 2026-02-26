@@ -1,4 +1,4 @@
-module lzc_28 (
+module lzc28 (
     input  logic [27:0] in_vec,
     output logic [4:0]  leading_zeroes
 );
