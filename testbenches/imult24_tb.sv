@@ -1,10 +1,10 @@
-module add32_tb();
+module imult24_tb();
 
-logic [31:0] a, b;
-logic [31:0] sum;
-logic [31:0] actual_sum;
+logic [23:0] a, b;
+logic [47:0] product;
+logic [47:0] actual_product;
 
-add32 dut(.a(a), .b(b), .sum(sum));
+imult24 dut(.a(a), .b(b), .sum(product));
 
 integer mismatches;
 integer successes;
@@ -16,7 +16,7 @@ string fname;
 integer ret;
 integer count;
 initial begin
-    fname = "testbenches/vectors.txt"; // use relative or absolute path
+    fname = "testbenches/imult24_vectors.txt"; // use relative or absolute path
     file = $fopen(fname, "r");
 
     if (file == 0) begin
@@ -25,7 +25,7 @@ initial begin
     end
 
     while (!$feof(file)) begin
-        ret = $fscanf(file, "%h %h %h\n", a, b, actual_sum);
+        ret = $fscanf(file, "%h %h %h\n", a, b, actual_product);
         if (ret != 3) begin
             $display("Invalid vector format on line %d", count);
             $finish;
@@ -34,8 +34,8 @@ initial begin
         count = count + 1;
 
         #1;
-        if (sum != actual_sum) begin
-            $display("Mismatch: a: %h b: %h found: %h expected: %h on line %d", a, b, sum, actual_sum, count);
+        if (product != actual_product) begin
+            $display("Mismatch: a: %h b: %h found: %h expected: %h on line %d", a, b, product, actual_product, count);
             mismatches = mismatches + 1;
         end
         else begin
