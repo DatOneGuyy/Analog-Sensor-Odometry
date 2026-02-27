@@ -16,7 +16,7 @@ string fname;
 integer ret;
 integer count;
 initial begin
-    fname = "testbenches/vectors.txt"; // use relative or absolute path
+    fname = "testbenches/fpadd32_vectors.txt"; // use relative or absolute path
     file = $fopen(fname, "r");
 
     if (file == 0) begin
