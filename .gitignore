@@ -6,3 +6,4 @@ verilator/
 obj_dir/
 angles
 add32
+imult24
