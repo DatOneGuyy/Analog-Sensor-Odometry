@@ -6,4 +6,5 @@ rm *.d
 rm *.o
 rm *.dat
 rm *.mk
+rm *.gch
 ./mult32
